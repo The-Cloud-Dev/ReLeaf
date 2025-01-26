@@ -1,0 +1,9 @@
+numpy
+opencv-python
+requests
+matplotlib
+pillow
+tensorflow
+openai
+flask
+mailtrap
