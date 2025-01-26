@@ -24,6 +24,7 @@ except ImportError:
 
 class ReLeafApp:
     def __init__(self, root):
+        self.ip = 'Enter your IP Address here'
         self.google_api = 'Insert your API Key here.'
         self.root, self.active_index = root, 0
         self.root.title("ReLeaf - Advanced GUI")
@@ -493,8 +494,8 @@ class ReLeafApp:
                         'image': encoded_image
                     }
                 response = requests.post(
-                    'http://34.59.23.29:8080/predict',
-                    json=data
+                    f'http://{self.ip}:8080/predict',
+                   json=data
                 )
                 
                 if response.status_code == 200:
