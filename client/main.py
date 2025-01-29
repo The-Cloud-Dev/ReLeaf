@@ -3,7 +3,7 @@ import tkinter as tk
 import os
 
 def install_libraries():
-    os.system('pip install tk tkintermapview pillow requests')
+    os.system('pip install tk tkintermapview pillow requests python-dotenv')
 
 try:
     import tkinter as tk
@@ -12,6 +12,7 @@ try:
     from PIL import Image as PILImage
     from PIL import ImageTk, Image
     import os,base64, requests, threading, time
+    from dotenv import load_dotenv
     from io import BytesIO
 except ImportError:
     install_libraries()
@@ -21,12 +22,14 @@ except ImportError:
     from PIL import Image as PILImage
     from PIL import ImageTk
     import os,base64, requests, threading, time
+    from dotenv import load_dotenv
     from io import BytesIO
 
 class ReLeafApp:
     def __init__(self, root):
-        self.ip = 'Enter your IP Address here'
-        self.google_api = 'Insert your API Key here.'
+        load_dotenv()
+        self.ip = os.getenv('SERVER_IP')
+        self.google_api = os.getenv('GOOGLE_API_KEY')
         self.root, self.active_index = root, 0
         self.root.title("ReLeaf - Advanced GUI")
         self.root.geometry("1112x600")
