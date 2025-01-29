@@ -6,6 +6,7 @@ import io
 import json
 import time
 import threading
+from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
@@ -30,13 +31,13 @@ import mailtrap as mt
 from mailtrap import Mail, Address, Attachment, Disposition, MailtrapClient
 
 app = Flask(__name__)
-
+load_dotenv()
 # Constants
 WATCHLIST_FILE = 'watchlist.json'
-MAILTRAP_API_KEY = "Add your API Key here."
+MAILTRAP_API_KEY = os.getenv('MAILTRAP_API_KEY')
 SENDER_EMAIL = "releaf@demomailtrap.com"
 SENDER_NAME = "ReLeaf Forest Monitor"
-OPENAI_API_KEY = "Add your API Key here."
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Cost constants (example values - adjust as needed)
 COST_PER_PREDICTION = 0.05  # Cost in USD per prediction
