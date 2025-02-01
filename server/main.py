@@ -43,10 +43,6 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 COST_PER_PREDICTION = 0.05  # Cost in USD per prediction
 COST_PER_TILE = 0.001      # Cost per map tile
 COST_PER_TOKEN = 0.000002  # OpenAI API cost per token
-import tensorflow as tf
-from tensorflow.keras.layers import (Input, Conv2D, BatchNormalization, Activation, 
-                                     MaxPooling2D, Dropout, Conv2DTranspose, concatenate)
-from tensorflow.keras.models import Model
 
 def conv2d_block(input_tensor, n_filters, kernel_size = 3, batchnorm = True):
     """Function to add 2 convolutional layers with the parameters passed to it"""
