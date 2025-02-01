@@ -1,32 +1,32 @@
-import numpy as np
-import cv2
-import base64
-import requests
-import io
-import json
-import time
-import threading
-from dotenv import load_dotenv
-import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
-from PIL import Image, ImageDraw, ImageFont
-from tensorflow.keras.layers import Input
 import tensorflow as tf
-from tensorflow.keras.models import Model
+from tensorflow.keras.layers import (Input, Conv2D, SeparableConv2D, BatchNormalization, 
+                                     GroupNormalization, LeakyReLU, MaxPooling2D, Dropout, 
+                                     Conv2DTranspose, concatenate, Activation)
+from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam, Nadam
 from tensorflow.keras import applications, optimizers
 from tensorflow.keras.applications import InceptionResNetV2
 from tensorflow.keras.applications.resnet50 import preprocess_input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator, load_img, img_to_array
 from tensorflow.keras.utils import model_to_dot, plot_model
-from tensorflow.keras.callbacks import *
-from tensorflow.keras.layers import *
-from tensorflow.keras.models import load_model
+from tensorflow.keras.callbacks import Callback
+
+import numpy as np
+import cv2
+import base64
+import requests
+import json
+import time
+import threading
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from PIL import Image, ImageDraw, ImageFont
+from io import BytesIO
+import io
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify
 from openai import OpenAI
-import tensorflow as tf
 
-from io import BytesIO
 import mailtrap as mt
 from mailtrap import Mail, Address, Attachment, Disposition, MailtrapClient
 
@@ -43,6 +43,10 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 COST_PER_PREDICTION = 0.05  # Cost in USD per prediction
 COST_PER_TILE = 0.001      # Cost per map tile
 COST_PER_TOKEN = 0.000002  # OpenAI API cost per token
+import tensorflow as tf
+from tensorflow.keras.layers import (Input, Conv2D, BatchNormalization, Activation, 
+                                     MaxPooling2D, Dropout, Conv2DTranspose, concatenate)
+from tensorflow.keras.models import Model
 
 def conv2d_block(input_tensor, n_filters, kernel_size = 3, batchnorm = True):
     """Function to add 2 convolutional layers with the parameters passed to it"""
@@ -110,7 +114,6 @@ def get_unet(input_img, n_filters = 16, dropout = 0.1, batchnorm = True):
 model = get_unet(Input((512, 512, 3)), 64, 0.1)
 model.load_weights('InceptionResNetV2-UNet.h5')
 client = OpenAI(api_key=OPENAI_API_KEY)
-# Load existing watchlist or create new one
 try:
     with open(WATCHLIST_FILE, 'r') as f:
         watchlist = json.load(f)
@@ -127,7 +130,7 @@ def get_next_report_time(timeframe):
         return now + timedelta(days=1)
     elif timeframe == "Weekly":
         return now + timedelta(weeks=1)
-    else:  # Monthly
+    else:
         return now + timedelta(days=30)
 
 def generate_pie_chart(forested, deforested, other):
@@ -296,12 +299,15 @@ def create_html_report(region_data, current_results, previous_results, compariso
     current_time = datetime.now()
     formatted_date = current_time.strftime('%B %d, %Y')  # e.g., March 19, 2024
     formatted_time = current_time.strftime('%I:%M %p')   # e.g., 02:30 PM
-
-    # Get location name
-    location = get_location_name(
-        region_data['min_lat'], 
-        region_data['min_long']
-    )
+    if region_data == 'xxx':
+        location = "Custom (One time)"
+    else:
+        # Get location name
+        location = get_location_name(
+            region_data['min_lat'], 
+            region_data['min_long']
+        )
+    
 
     # Create comparison section based on whether previous results exist
     if previous_results:
@@ -519,22 +525,31 @@ def create_html_report(region_data, current_results, previous_results, compariso
     """
     return html_template
 
-def send_email_report(email, region_data, prediction_results):
+def send_email_report(email, region_data, prediction_results,map=True,image=""):
     try:
         # Get previous results if they exist
         previous_results = None
-        if email in watchlist and region_data.get('previous_results'):
-            previous_results = region_data['previous_results']
-
-        # Create visualizations
-        original_image = fetch_and_stitch_tiles(
-            region_data['min_lat'],
-            region_data['max_lat'],
-            region_data['min_long'],
-            region_data['max_long'],
-            region_data['zoom']
-        )
-
+        if map:
+            if email in watchlist and region_data.get('previous_results'):
+                previous_results = region_data['previous_results']
+                subject = f"ReLeaf Forest Coverage Report - {region_data['timeframe']}"
+            else:
+                subject = f"ReLeaf Forest Coverage Report - One Time"
+            # Create visualizations
+            original_image = fetch_and_stitch_tiles(
+                region_data['min_lat'],
+                region_data['max_lat'],
+                region_data['min_long'],
+                region_data['max_long'],
+                region_data['zoom']
+            )
+            tile_count = ((region_data['max_lat'] - region_data['min_lat']) * 
+                 (region_data['max_long'] - region_data['min_long']) * 
+                 (2 ** region_data['zoom']))
+        else:
+            subject = "ReLeaf Forest Coverage Report - Custom (One Time)"
+            original_image=image
+            tile_count = 4
         # Decode masked image
         masked_image = cv2.imdecode(
             np.frombuffer(
@@ -554,9 +569,6 @@ def send_email_report(email, region_data, prediction_results):
 
         # Get AI analysis and calculate costs
         ai_analysis = get_ai_analysis(prediction_results, previous_results)
-        tile_count = ((region_data['max_lat'] - region_data['min_lat']) * 
-                     (region_data['max_long'] - region_data['min_long']) * 
-                     (2 ** region_data['zoom']))
         costs = calculate_costs(tile_count)
 
         # Create HTML report
@@ -577,7 +589,7 @@ def send_email_report(email, region_data, prediction_results):
                 name=SENDER_NAME
             ),
             to=[Address(email=email)],
-            subject=f"ReLeaf Forest Coverage Report - {region_data['timeframe']}",
+            subject=subject,
             html=html_content,
             attachments=[
                 Attachment(
@@ -763,25 +775,15 @@ def predict():
     try:
         data = request.get_json()
         email = data['email']
-        results = process_image(image)
+        results = None  # Placeholder for processed results
         
-        # Get AI analysis
-        ai_analysis = get_ai_analysis(results)
-
-        # Add AI analysis to results
-        results['ai_analysis'] = ai_analysis
-
         if 'image' in data:
+            # Case 3: User uploads a custom image
             image = base64.b64decode(data['image'])
-            comparison_image = send_email_report(email, 'xxx', results)
-            # Check if the comparison image is valid
-            if comparison_image is None:
-                raise ValueError("Comparison image is None.")
-
-            base64_combined_image = base64.b64encode(comparison_image)            # Replace the predicted_mask_base64 with the new base64 encoded comparison image
-            results['predicted_mask_base64'] = base64_combined_image
+            custom = True
         else:
-            # Fetch and process image
+            custom = False
+            # Case 1 & 2: User selects a region on the map
             image = fetch_and_stitch_tiles(
                 data['min_lat'],
                 data['max_lat'],
@@ -790,15 +792,18 @@ def predict():
                 data['zoom']
             )
 
-        # Add to watchlist if requested
-        if data.get('watchlist', False):
+        # Process image through AI model
+        results = process_image(image)
+        results['ai_analysis'] = get_ai_analysis(results)
+
+        # Case 1: User adds region to watchlist
+        if data.get('watchlist'):
             if email not in watchlist:
                 watchlist[email] = {}
 
-            # Create unique ID for this region
-            region_id = f"region_{len(watchlist[email])}"
+            region_id = f"region_{len(watchlist[email])}"  # Unique ID for region
 
-            # Store region data
+            # Store region in the watchlist
             watchlist[email][region_id] = {
                 'min_lat': data['min_lat'],
                 'max_lat': data['max_lat'],
@@ -807,30 +812,41 @@ def predict():
                 'zoom': data['zoom'],
                 'timeframe': data['timeframe'],
                 'next_report': get_next_report_time(data['timeframe']).isoformat(),
-                'previous_results': None
+                'previous_results': {
+                    'forested_percentage': results['forested_percentage'],
+                    'deforested_percentage': results['deforested_percentage'],
+                    'other_percentage': results['other_percentage']
+                }
             }
 
-            # Send initial report immediately
+            # Update email report with specific watchlist region
             comparison_image = send_email_report(email, watchlist[email][region_id], results)
-            # Check if the comparison image is valid
+            results['predicted_mask_base64'] = base64.b64encode(comparison_image).decode('utf-8')
+
+            save_watchlist()  # Save changes to watchlist
+        else:
+            if custom:
+                # Send email report and retrieve comparison image
+                comparison_image = send_email_report(email, 'xxx', results,image=image,map=False)  # Default case (xxx placeholder)
+            else:
+                # Store region in the watchlist
+                region_data = {
+                    'min_lat': data['min_lat'],
+                    'max_lat': data['max_lat'],
+                    'min_long': data['min_long'],
+                    'max_long': data['max_long'],
+                    'zoom': data['zoom'],
+                    'previous_results': ''
+                }
+                comparison_image = send_email_report(email, region_data, results)
             if comparison_image is None:
                 raise ValueError("Comparison image is None.")
-
-            base64_combined_image = base64.b64encode(comparison_image)            # Replace the predicted_mask_base64 with the new base64 encoded comparison image
-            results['predicted_mask_base64'] = base64_combined_image
-            # Update previous_results for next comparison
-            watchlist[email][region_id]['previous_results'] = {
-                'forested_percentage': results['forested_percentage'],
-                'deforested_percentage': results['deforested_percentage'],
-                'other_percentage': results['other_percentage']
-            }
-
-            # Save updated watchlist
-            save_watchlist()
-
+    
+            results['predicted_mask_base64'] = base64.b64encode(comparison_image).decode('utf-8')
         return jsonify(results)
 
     except Exception as e:
+        print(e)
         return jsonify({"error": str(e)}), 500
 
 def check_and_send_reports():
