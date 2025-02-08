@@ -775,7 +775,10 @@ def predict():
         
         if 'image' in data:
             # Case 3: User uploads a custom image
-            image = base64.b64decode(data['image'])
+            image = base64.b64decode(data['image'].encode('utf-8'))
+            image = np.frombuffer(image, np.uint8)
+            image = cv2.imdecode(image, cv2.IMREAD_COLOR)
+            print(np.shape(image))
             custom = True
         else:
             custom = False
