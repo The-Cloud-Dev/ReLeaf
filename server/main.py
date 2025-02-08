@@ -777,8 +777,8 @@ def predict():
             # Case 3: User uploads a custom image
             image = base64.b64decode(data['image'].encode('utf-8'))
             image = np.frombuffer(image, np.uint8)
-            image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-            print(np.shape(image))
+            image = cv2.imdecode(image, cv2.IMREAD_COLOR)  
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)  # Convert BGR to RGB
             custom = True
         else:
             custom = False
