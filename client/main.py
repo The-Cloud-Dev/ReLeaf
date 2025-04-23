@@ -11,7 +11,7 @@ def show_installation_tutorial():
     label = tk.Label(root, text="Greetings! Our program requires certain libraries to be installed in order for it to work, there was an error installing so please do it manually!")
     label.pack(padx=10, pady=10)
     
-    command_label = tk.Label(root, text="To install the library: Open Command Prompt --? Type "pip intall tk tkintermapview requests python-dotenv". Once that is done, just restart this program and it should work!")
+    command_label = tk.Label(root, text="To install the library: Open Command Prompt --? Type pip intall tk tkintermapview requests python-dotenv Once that is done, just restart this program and it should work!")
     command_label.pack(padx=10, pady=10)
     
     root.mainloop()
