@@ -25,6 +25,7 @@ try:
     from PIL import ImageTk, Image
     import os,base64, requests, threading, time
     from io import BytesIO
+    from dotenv import load_dotenv
     import re
 except ImportError:
     install_libraries()
@@ -38,11 +39,13 @@ except ImportError:
         from PIL import ImageTk
         import os,base64, requests, threading, time
         from io import BytesIO
+        from dotenv import load_dotenv
     except ImportError:
         show_installation_tutorial()
 
 class ReLeafApp:
     def __init__(self, root):
+        load_dotenv()
         self.root, self.active_index = root, 0
         self.root.title("ReLeaf - Advanced GUI")
         self.root.geometry("1112x600")
@@ -53,6 +56,7 @@ class ReLeafApp:
         self.button_hover_color, self.content_bg_color = "#B07C57", "#FFFFFF"
         self.border_color = "#916A4F"
         self.file_path = ""
+        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
         try:
             self.font_raleway = ("Raleway", 12)
             self.font_raleway_bold = ("Raleway", 16)
@@ -452,7 +456,7 @@ class ReLeafApp:
             self.search_thread.start()
 
     def search_address(self, address): 
-        response = requests.get(f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key=AIzaSyBpCnNAffRHGgwpqjHnSVsPBELyQPFyH3g")
+        response = requests.get(f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={self.GOOGLE_API_KEY}")
         return response.json()["results"] if response.status_code == 200 else []
 
     def show_address_preview(self, address):
