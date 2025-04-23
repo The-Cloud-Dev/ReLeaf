@@ -1,35 +1,48 @@
-#Import libraries
 import tkinter as tk
 import os
 
 def install_libraries():
     os.system('pip install tk tkintermapview pillow requests python-dotenv')
 
+def show_installation_tutorial():
+    root = tk.Tk()
+    root.title("Library Installation Tutorial")
+    
+    label = tk.Label(root, text="Greetings! Our program requires certain libraries to be installed in order for it to work, there was an error installing so please do it manually!")
+    label.pack(padx=10, pady=10)
+    
+    command_label = tk.Label(root, text="To install the library: Open Command Prompt --? Type "pip intall tk tkintermapview requests python-dotenv". Once that is done, just restart this program and it should work!")
+    command_label.pack(padx=10, pady=10)
+    
+    root.mainloop()
+
 try:
     import tkinter as tk
     from tkinter import font, PhotoImage, Label, messagebox, filedialog
+    import tkinter.simpledialog as simpledialog
     from tkintermapview import TkinterMapView
     from PIL import Image as PILImage
     from PIL import ImageTk, Image
     import os,base64, requests, threading, time
-    from dotenv import load_dotenv
     from io import BytesIO
+    import re
 except ImportError:
     install_libraries()
-    import tkinter as tk
-    from tkinter import font, PhotoImage, Label, messagebox, filedialog
-    from tkintermapview import TkinterMapView
-    from PIL import Image as PILImage
-    from PIL import ImageTk
-    import os,base64, requests, threading, time
-    from dotenv import load_dotenv
-    from io import BytesIO
+    try:
+        import re
+        import tkinter as tk
+        from tkinter import font, PhotoImage, Label, messagebox, filedialog
+        import tkinter.simpledialog as simpledialog
+        from tkintermapview import TkinterMapView
+        from PIL import Image as PILImage
+        from PIL import ImageTk
+        import os,base64, requests, threading, time
+        from io import BytesIO
+    except ImportError:
+        show_installation_tutorial()
 
 class ReLeafApp:
     def __init__(self, root):
-        load_dotenv()
-        self.ip = os.getenv('SERVER_IP')
-        self.google_api = os.getenv('GOOGLE_API_KEY')
         self.root, self.active_index = root, 0
         self.root.title("ReLeaf - Advanced GUI")
         self.root.geometry("1112x600")
@@ -39,11 +52,11 @@ class ReLeafApp:
         self.control_panel_color, self.button_active_color = "#758A48", "#899D5E"
         self.button_hover_color, self.content_bg_color = "#B07C57", "#FFFFFF"
         self.border_color = "#916A4F"
+        self.file_path = ""
         try:
             self.font_raleway = ("Raleway", 12)
             self.font_raleway_bold = ("Raleway", 16)
         except tk.TclError:
-            print("error")
             self.font_raleway = font.nametofont("TkDefaultFont")
             self.font_raleway_bold = self.font_raleway.copy()
             self.font_raleway_bold.configure(size=16, weight="bold")
@@ -54,7 +67,7 @@ class ReLeafApp:
 
         tk.Label(self.root, text="ReLeaf", font=self.font_raleway_bold, bg=self.control_panel_color, fg="white").place(x=0, y=30, width=212)
 
-        self.buttons = ["Map", "Email", "AI"]
+        self.buttons =  ["Map", "Contact", "AI", "About"]
         self.icons = [PhotoImage(file=f"images/{name.lower()}.png") for name in self.buttons]
         self.buttons_frame = []
         self.setup_navigation()
@@ -111,7 +124,12 @@ class ReLeafApp:
         new_rectangle.place(x=0, y=0)
 
         for widget in self.content_area.winfo_children(): widget.destroy()
-        {0: self.load_map_page, 1: self.show_email_page, 2: self.show_ai_page}[index]()
+        {
+            0: self.load_map_page, 
+            1: self.show_contact_page, 
+            2: self.show_ai_page, 
+            3: self.show_about_page
+        }[index]()
 
     def load_image(self, image_name): return ImageTk.PhotoImage(Image.open(os.path.join("images", image_name)))
 
@@ -166,7 +184,7 @@ class ReLeafApp:
         tk.Label(self.content_area, text="View Map", font=self.font_raleway_bold, bg=self.content_bg_color, fg=self.control_panel_color).place(relx=0.5, y=30, anchor="n")
         self.map_view = TkinterMapView(self.content_area, width=602, height=300)
         self.map_view.place(relx=0.5, y=80, anchor="n")
-        self.map_view.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
+        self.map_view.set_tile_server("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", max_zoom=22)
         self.map_view.add_left_click_map_command(self.on_map_click)
 
         search_container = tk.Frame(self.content_area, bg=self.content_bg_color)
@@ -197,7 +215,6 @@ class ReLeafApp:
 
         self.create_button(self.content_area, 150, 45, "View Analysis", "get.png", self.analyze_area, relx=0.5, y=520)
 
-        # Add rectangle button for area selection
         self.rectangle_image = self.load_image("rectangle.png")
         self.black_rectangle = self.create_black_version(self.rectangle_image)
         self.rectangle_button = tk.Label(self.content_area, image=self.rectangle_image, bg=self.content_bg_color, cursor="hand2")
@@ -207,40 +224,37 @@ class ReLeafApp:
         self.rectangle_button.bind("<Leave>", self.on_rectangle_leave)
         self.rectangle_button.bind("<Button-1>", self.start_drawing)
 
-        upload_image = Image.open("images/upload.png")# Adjust width and height as needed
+        upload_image = Image.open("images/upload.png")
         upload_photo = ImageTk.PhotoImage(upload_image)
 
         def select_image_for_analysis():
             self.file_path = filedialog.askopenfilename(title="Select Image for Analysis", filetypes=[("Image files", "*.png *.jpg *.jpeg")])
             if self.file_path:
+                location_name = self.prompt_for_location_name()
+                print(location_name)
+                if location_name is None or location_name.strip() == "":
+                    print("Cancelled", "No location name entered. Action cancelled.")
+                    return
+                self.location_name = location_name
                 self.change_page(1)
                 self.watchlist_checkbox.config(state="disabled")
 
         upload_button = tk.Label(self.content_area, image=upload_photo, bg=self.content_bg_color, cursor="hand2")
-        upload_button.image = upload_photo  # Keep a reference to the image to prevent garbage collection
-        upload_button.place(x=50, y=150)  # Adjust the y-coordinate as needed
-        upload_button.bind("<Enter>", self.on_upload_hover)
-        upload_button.bind("<Leave>", self.on_upload_leave)
+        upload_button.image = upload_photo
+        upload_button.place(x=50, y=150)
         upload_button.bind("<Button-1>",lambda event: select_image_for_analysis())
 
-
-    def on_upload_hover(self, event):
-        pass
-
-    def on_upload_leave(self, event):
-        pass
-
-
-
-    def show_email_page(self):
+    def show_contact_page(self):
         tk.Frame(self.content_area, bg=self.border_color, width=702, height=2).place(relx=0.5, y=20, anchor="n")
-        tk.Label(self.content_area, text="Email", font=self.font_raleway_bold, bg=self.content_bg_color, fg=self.control_panel_color).place(x=95, y=30)
+        tk.Label(self.content_area, text="Contact", font=self.font_raleway_bold, bg=self.content_bg_color, fg=self.control_panel_color).place(x=95, y=30)
         tk.Label(self.content_area, text="Receive your forest coverage analysis report", font=self.font_raleway, bg=self.content_bg_color, fg="#666666").place(x=95, y=80)
         tk.Label(self.content_area, text="Enter email:", font=self.font_rasa, bg=self.content_bg_color, fg="black").place(relx=0.5, y=250, anchor="s")
 
         self.setup_email_input()
+        tk.Label(self.content_area, text="Enter contact number:", font=self.font_rasa, bg=self.content_bg_color, fg="black").place(relx=0.5, y=340, anchor="s")
+        self.setup_contact_number_input()
         options_frame = tk.Frame(self.content_area, bg=self.content_bg_color)
-        options_frame.place(relx=0.5, y=350, anchor="center")
+        options_frame.place(relx=0.5, y=400, anchor="center")
         
         self.watchlist_var = tk.BooleanVar()
         self.watchlist_checkbox = tk.Checkbutton(
@@ -274,61 +288,74 @@ class ReLeafApp:
         )
         self.timeframe_dropdown.pack(side="left")
         
-        self.create_button(self.content_area, 150, 45, "Confirm", "Tick.png", self.handle_email_submit, relx=0.5, y=380)
+        self.create_button(self.content_area, 150, 45, "Confirm", "Tick.png", self.handle_email_submit, relx=0.5, y=430)
 
+    def setup_contact_number_input(self):
+        canvas = tk.Canvas(self.content_area, width=300, height=40, bg=self.content_bg_color, highlightthickness=0)
+        canvas.place(relx=0.5, y=330, anchor="n")
+        canvas.create_rounded_rectangle = self.create_rounded_rectangle(canvas)
+        canvas.create_rounded_rectangle(0, 0, 300, 40, 15, fill="#EFEFEF", width=0)
+
+        self.contact_number_entry = tk.Entry(canvas, font=self.font_raleway, bd=0, fg="gray", bg="#EFEFEF", highlightthickness=0, width=30)
+        self.contact_number_entry.insert(0, "123-456-7890")
+        self.contact_number_entry.place(relx=0.5, rely=0.5, anchor="center")
+        self.contact_number_entry.bind("<FocusIn>", self.on_contact_number_focus_in)
+        self.contact_number_entry.bind("<FocusOut>", self.on_contact_number_focus_out)
+
+    def on_contact_number_focus_in(self, event):
+        if self.contact_number_entry.get() == "123-456-7890":
+            self.contact_number_entry.delete(0, tk.END)
+            self.contact_number_entry.config(fg="black")
+
+    def on_contact_number_focus_out(self, event):
+        if not self.contact_number_entry.get():
+            self.contact_number_entry.insert(0, "123-456-7890")
+            self.contact_number_entry.config(fg="gray")
+    
     def show_ai_page(self, analysis_received=False):
-        # Clear previous content
         for widget in self.content_area.winfo_children():
             widget.destroy()
 
         tk.Frame(self.content_area, bg=self.border_color, width=702, height=2).place(relx=0.5, y=20, anchor="n")
         tk.Label(self.content_area, text="AI Analysis", font=self.font_raleway_bold, bg=self.content_bg_color, fg=self.control_panel_color).place(relx=0.5, y=30, anchor="n")
 
-        # Create a label for the predicted mask image
         if analysis_received:
             self.predicted_mask_image_label = tk.Label(self.content_area, bg=self.content_bg_color)
-            self.predicted_mask_image_label.place(relx=0.5, y=80, anchor="n")  # Position it below the heading
-            self.display_predicted_mask()  # Display the image if analysis is received
+            self.predicted_mask_image_label.place(relx=0.5, y=80, anchor="n")
+            self.display_predicted_mask()
         else:
-            if hasattr(self, 'predicted_mask_image_label'):
-                self.predicted_mask_image_label.place_forget()  # Hide the image label if analysis is not received
+            if hasattr(self, 'predicted_mask_image_label') and self.predicted_mask_image_label.winfo_exists():
+                self.predicted_mask_image_label.place_forget()
 
-        # Set rectangle height based on whether analysis is received
         rectangle_height = 400 if not analysis_received else 250
-        print(f"rectangle_height: {rectangle_height}")  # Debugging output
+        print(f"rectangle_height: {rectangle_height}")
 
-        # Increase rectangle width to avoid layout issues
         self.output_canvas = tk.Canvas(self.content_area, bg="#EFEFEF", width=650, height=rectangle_height, highlightthickness=0)
 
         if not analysis_received:
-            self.output_canvas.place(relx=0.5, y=self.content_area.winfo_height() // 2 - rectangle_height // 2, anchor="n")  # Centered
+            self.output_canvas.place(relx=0.5, y=self.content_area.winfo_height() // 2 - rectangle_height // 2, anchor="n")
         else:
-            self.output_canvas.place(relx=0.5, y=self.content_area.winfo_height() - 10, anchor="s")  # 10px above the bottom
+            self.output_canvas.place(relx=0.5, y=self.content_area.winfo_height() - 10, anchor="s")
 
         self.output_canvas.create_rounded_rectangle = self.create_rounded_rectangle(self.output_canvas)
         self.output_canvas.create_rounded_rectangle(0, 0, 650, rectangle_height, 15, fill="#EFEFEF", width=0)
 
-        # Create a frame for the text area with a scrollbar
         text_frame = tk.Frame(self.output_canvas, bg="#EFEFEF")
         self.output_canvas.create_window((0, 0), window=text_frame, anchor="nw")
 
-        # Create a scrollbar with 4px thickness
-        scrollbar = tk.Scrollbar(text_frame, width=4)  # Adjust width for a thinner scrollbar
+        scrollbar = tk.Scrollbar(text_frame, width=4)
         scrollbar.pack(side="right", fill="y")
 
-        # Create a text widget for AI analysis output with word wrapping and padding
         self.output_text = tk.Text(text_frame, wrap=tk.WORD, width=70, height=10, font=self.font_raleway, bg="#EFEFEF", fg="black", bd=0, highlightthickness=0, yscrollcommand=scrollbar.set, padx=10, pady=10)
         self.output_text.pack(side="left", fill="both", expand=True)
         scrollbar.config(command=self.output_text.yview)
 
-        # Display AI analysis text if received
         if analysis_received:
             self.output_text.config(state="normal")
-            self.output_text.delete("1.0", tk.END)  # Clear previous text
-            self.output_text.insert("1.0", self.ai_analysis_text)  # Insert the AI analysis text
-            self.output_text.config(state="disabled")  # Make it read-only
+            self.output_text.delete("1.0", tk.END)
+            self.output_text.insert("1.0", self.ai_analysis_text)
+            self.output_text.config(state="disabled")
 
-        # Initial message when waiting for AI response
         if not analysis_received:
             self.output_text.config(state="normal")
             self.output_text.insert("1.0", "Waiting for AI analysis response...")
@@ -336,7 +363,7 @@ class ReLeafApp:
 
     def setup_email_input(self):
         canvas = tk.Canvas(self.content_area, width=300, height=40, bg=self.content_bg_color, highlightthickness=0)
-        canvas.place(relx=0.5, y=270, anchor="n")
+        canvas.place(relx=0.5, y=240, anchor="n")
         canvas.create_rounded_rectangle = self.create_rounded_rectangle(canvas)
         canvas.create_rounded_rectangle(0, 0, 300, 40, 15, fill="#EFEFEF", width=0)
 
@@ -356,6 +383,57 @@ class ReLeafApp:
         self.output_text.place(relx=0.5, rely=0.5, anchor="center")
         self.output_text.insert("1.0", "AI analysis will appear here...")
         self.output_text.config(state="disabled")
+    
+    def safe_scroll(self, widget, event):
+        try:
+            widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        except (tk.TclError, AttributeError):
+            # Widget was destroyed or never existed
+            pass
+        
+    def show_about_page(self):
+        tk.Frame(self.content_area, bg=self.border_color, width=800, height=2).place(relx=0.5, y=20, anchor="n")
+        tk.Label(self.content_area, text="ReLeaf was created by", font=self.font_raleway_bold, bg=self.content_bg_color, fg=self.control_panel_color).place(relx=0.5, y=30, anchor="n")
+
+        scroll_canvas = tk.Canvas(self.content_area, bg=self.content_bg_color)
+        scroll_canvas.place(relx=0.5, y=80, anchor="n", width=800, height=400)
+
+        scrollbar = tk.Scrollbar(scroll_canvas, width=20, command=scroll_canvas.yview)
+        scrollbar.pack(side="right", fill="y")
+
+        self.scrollable_frame = tk.Frame(scroll_canvas, bg=self.content_bg_color)
+        scroll_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.scrollable_frame.bind("<Configure>", lambda e: scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all")))
+        scroll_canvas.configure(yscrollcommand=scrollbar.set)
+
+        self.create_profile_box(0, "Tinkerer", "Ved", "Shivane", "Tinkerer and programmer, loves writing code to solve real world problems. Is keenly interested in AI and ML projects and is studying various advanced methods of implementing them, and applying them in projects like ReLeaf.", "ved.png", self.scrollable_frame)
+        self.create_profile_box(390, "Innovator", "Vijay Ganesh", "Kumar", "I am a curious and creative 9th-grade student following the Cambridge curriculum. Passionate about learning, I excel in writing and enjoys exploring topics like public speaking, current events, and culture. I am a thoughtful, hardworking, and driven individual.", "vijay.png", self.scrollable_frame)
+
+        self.create_profile_box(45, "Developer", "Keerthan", "Bhaskaran", "As a developer for ReLeaf, I integrate AI and geospatial data to combat deforestation, monitor forest changes, and support reforestation and sustainable land management efforts.", "keerthan.png", self.scrollable_frame)
+
+        for text, y in [("© 2025-26 Ved, Vijay and Keerthan, All rights reserved", 520), ("Opensourced under the MIT license", 560)]:
+            tk.Label(self.content_area, text=text, font=("Raleway", 10, "bold"), bg=self.content_bg_color, fg=self.control_panel_color).place(relx=0.5, y=y, anchor="center")
+
+        self.content_area.bind_all("<MouseWheel>", lambda event: self.safe_scroll(scroll_canvas, event))
+
+    def create_profile_box(self, x_pos, title, first_name, last_name, description, image_name, parent_frame):
+        canvas = tk.Canvas(parent_frame, width=380, height=280, bg=self.content_bg_color, highlightthickness=0)
+        canvas.pack(side="top", padx=200, pady=10)
+        canvas.create_rounded_rectangle = self.create_rounded_rectangle(canvas)
+        canvas.create_rounded_rectangle(0, 0, 380, 280, 15, fill="#EFEFEF", width=0)
+        
+        tk.Label(canvas, text=title, font=self.font_raleway, bg="#EFEFEF", fg="#777777").place(x=20, y=20)
+        tk.Label(canvas, text=first_name, font=("Raleway", 24), bg="#EFEFEF", fg=self.control_panel_color).place(x=20, y=50)
+        tk.Label(canvas, text=last_name, font=("Raleway", 16), bg="#EFEFEF", fg=self.control_panel_color).place(x=20, y=85)
+
+        profile_image = self.load_image(image_name)
+        image_label = tk.Label(canvas, image=profile_image, bg="#EFEFEF")
+        image_label.image = profile_image
+        image_label.place(x=220, y=-20)
+
+        tk.Frame(canvas, bg="white", width=113, height=2).place(x=20, y=120)
+        tk.Label(canvas, text=description, font=self.font_raleway, bg="#EFEFEF", fg="#666666", wraplength=340, justify="left").place(x=20, y=140)
 
     def on_key_release(self, event):
         address = self.search_entry.get()
@@ -374,7 +452,7 @@ class ReLeafApp:
             self.search_thread.start()
 
     def search_address(self, address): 
-        response = requests.get(f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key={self.google_api}")
+        response = requests.get(f"https://maps.googleapis.com/maps/api/geocode/json?address={address}&key=AIzaSyBpCnNAffRHGgwpqjHnSVsPBELyQPFyH3g")
         return response.json()["results"] if response.status_code == 200 else []
 
     def show_address_preview(self, address):
@@ -393,6 +471,11 @@ class ReLeafApp:
         self.search_entry.insert(0, display_name)
         self.map_view.set_position(lat, lon)
         self.map_view.set_zoom(15)
+        
+        self.map_view.delete_all_marker()
+        
+        self.map_view.set_marker(lat, lon)
+        
         self.clear_search_results()
 
     def clear_search_results(self): 
@@ -405,41 +488,29 @@ class ReLeafApp:
         return ImageTk.PhotoImage(black_image)
 
     def handle_server_response(self, response_data):
-        """Handle server response with loading indicator"""
         def process_response():
             try:
-                # Show loading message
-                self.change_page(2)  # Switch to AI page
+                self.change_page(2)
                 self.output_text.config(state="normal")
                 self.output_text.delete("1.0", tk.END)
                 self.output_text.insert("1.0", "Processing analysis...")
                 self.output_text.config(state="disabled")
                 self.root.update()
 
-                # Extract base64 image and decode it
                 image_data = base64.b64decode(response_data["predicted_mask_base64"])
                 
-                # Save the image locally
                 with open("predicted_mask.png", "wb") as f:
                     f.write(image_data)
                     
-                # Print percentages to console
-                print(f"Forest coverage: {response_data['forested_percentage']:.2f}%")
-                print(f"Non-forest areas: {response_data['deforested_percentage']:.2f}%")
-                print(f"Other areas: {response_data['other_percentage']:.2f}%")
-                
-                # Store and display AI analysis
                 self.ai_analysis_text = response_data.get('ai_analysis', 'AI analysis not available')
                 self.display_ai_analysis(self.ai_analysis_text)
                 
-                # Update the AI page to show the analysis
-                print("Calling show_ai_page with analysis_received=True")  # Debugging output
-                self.show_ai_page(analysis_received=True)  # Ensure this is set to True
+                print("Calling show_ai_page with analysis_received=True")
+                self.show_ai_page(analysis_received=True)
 
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to process server response: {str(e)}")
 
-        # Run in a separate thread to prevent UI freezing
         threading.Thread(target=process_response, daemon=True).start()
 
     def display_ai_analysis(self, analysis_text):
@@ -449,14 +520,28 @@ class ReLeafApp:
         self.output_text.config(state="disabled")
 
     def handle_email_submit(self):
-        """Handle email submission with loading indicator"""
         if not hasattr(self, 'min_lat') and self.file_path == "":
-            print("hi")
             messagebox.showerror("Error", "Please select an area on the map first.")
             return
+
         email = self.email_entry.get()
+        number = self.contact_number_entry.get()
+        if email == "john@doe.com":
+            email = ""
+        if number == "123-456-7890":
+            number = ""
+        email_pattern = r"[^@]+@[^@]+\.[^@]+"
+        if not re.match(email_pattern, email):
+            messagebox.showerror("Error", "Please enter a valid email address.")
+            return
+
+        if number.strip() != '':
+            number_pattern = r"^\+?\d{7,15}$" 
+            if not re.match(number_pattern, number):
+                messagebox.showerror("Error", "Please enter a valid contact number (e.g., +1234567890).")
+                return
+
         if self.current_rectangle:
-            # Get all the values before starting the thread
             watchlist = self.watchlist_var.get()
             timeframe = self.timeframe_var.get()
             min_lat = self.min_lat
@@ -465,8 +550,7 @@ class ReLeafApp:
             max_lon = self.max_lon
             current_zoom = self.current_zoom
 
-        # Show loading message
-        self.change_page(2)  # Switch to AI page
+        self.change_page(2)
         self.output_text.config(state="normal")
         self.output_text.delete("1.0", tk.END)
         self.output_text.insert("1.0", "Analyzing selected area...\nThis may take a few moments.")
@@ -475,13 +559,12 @@ class ReLeafApp:
 
         def submit_request():
             try:
-                try:
-                    print(self.file_path)
-                except:
+                if not hasattr(self, "file_path"):
                     self.file_path = ""
-                if self.current_rectangle and self.file_path == "":
+                if self.current_rectangle and (self.file_path is None or self.file_path == ''):
                     data = {
                         "email": email,
+                        "number": number.strip(),  # Send as empty string if not provided
                         "watchlist": watchlist,
                         "timeframe": timeframe,
                         "min_lat": min_lat,
@@ -494,24 +577,28 @@ class ReLeafApp:
                     with open(self.file_path, "rb") as image_file:
                         encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
                     data = {
-                        'email': email,
-                        'image': encoded_image
+                        "email": email,
+                        "number": number.strip(),
+                        "image": encoded_image,
+                        "location": self.location_name
                     }
+
+                self.file_path = None
                 response = requests.post(
-                    f'http://{self.ip}:8080/predict',
-                   json=data
+                    'https://api.projectreleaf.xyz/predict',
+                    json=data
                 )
-                
+
                 if response.status_code == 200:
                     self.root.after(0, lambda: self.handle_server_response(response.json()))
                     self.root.after(0, lambda: messagebox.showinfo("Success", "Your request has been submitted successfully!"))
                 else:
                     self.root.after(0, lambda: messagebox.showerror("Error", f"Server returned status code: {response.status_code}"))
-                
+
             except requests.exceptions.RequestException as e:
                 self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to connect to server: {str(e)}"))
 
-        # Run in a separate thread
+
         threading.Thread(target=submit_request, daemon=True).start()
 
     def on_rectangle_hover(self, event):
@@ -564,23 +651,43 @@ class ReLeafApp:
         self.current_rectangle = self.map_view.set_polygon([(lat1, lon1), (lat1, lon2), (lat2, lon2), (lat2, lon1)], fill_color="blue", outline_color="blue", border_width=2)
 
     def analyze_area(self):
-        if self.current_rectangle or self.file_path:
-            try:
-                if self.current_rectangle:
-                    self.export_image()
-                self.change_page(1)  # Switch to email page
-            except Exception as e:
-                messagebox.showerror("Error", f"Failed to export image: {str(e)}")
-        else:
+        try:  
+            if self.current_rectangle or self.file_path:
+                try:
+                    if self.file_path:
+                        location_name = self.prompt_for_location_name()
+                        if not location_name:
+                            messagebox.showerror("Error", "Please enter a valid location name.")
+                            return
+                except:
+                    pass
+                try:
+                    if self.current_rectangle:
+                        self.export_image()
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to export image: {str(e)}")
+                self.change_page(1)
+
+            else:
+                messagebox.showwarning("No Selection", "Please select an area on the map first.")
+        except:
             messagebox.showwarning("No Selection", "Please select an area on the map first.")
+            return
+    def prompt_for_location_name(self):
+        while True:
+            location_name = simpledialog.askstring("Location Name", "Enter the name of the location:")
+            if location_name is None:
+                return None
+            location_name = location_name.strip()
+            if len(location_name) >= 3:
+                return location_name
+            messagebox.showwarning("Invalid Input", "Please enter a meaningful location name (at least 3 characters).")
 
     def export_image(self):
-        """Fetch and stitch map tiles for the area inside the selected rectangle."""
         if not self.start_coords or not self.end_coords:
             messagebox.showerror("Error", "No rectangle selected to export.")
             return
 
-        # Store these values as class attributes so they're accessible elsewhere
         self.min_lat, self.max_lat = sorted([self.start_coords[0], self.end_coords[0]])
         self.min_lon, self.max_lon = sorted([self.start_coords[1], self.end_coords[1]])
         self.current_zoom = round(self.map_view.zoom)
@@ -604,17 +711,13 @@ class ReLeafApp:
         self.rectangle_button.configure(image=self.black_rectangle)
 
     def display_predicted_mask(self):
-        # Load and display the predicted mask image
         original_image = PILImage.open("predicted_mask.png")
-        
-        # Scale down the image while maintaining aspect ratio
-        original_image.thumbnail((400, 400), Image.LANCZOS)  # Adjust to fit within the canvas
+        original_image.thumbnail((400, 400), Image.LANCZOS)
 
         self.predicted_mask_image = ImageTk.PhotoImage(original_image)
 
-        # Update the label with the predicted mask image
         self.predicted_mask_image_label.config(image=self.predicted_mask_image)
-        self.predicted_mask_image_label.image = self.predicted_mask_image  # Keep a reference to avoid garbage collection
+        self.predicted_mask_image_label.image = self.predicted_mask_image
 
 if __name__ == "__main__":
     root = tk.Tk()
